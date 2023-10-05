@@ -20,6 +20,10 @@
 
 原使用参数-h等可参照原项目地址。
 
+### -b <set reponse header>: 指定响应报头
+	./mproxy -l 8080 -m Lbxx: -r 127.0.0.1:443 -b "Server: nginxX\r\n"
+ 上面的命令，增加了 reponse的Server 响应头，当然还可以增加多个，用\r\n隔开，最后请以\r\n结尾！
+
 ## 使用
 - 上传源码，秒编译一下：gcc -o mproxy mproxy.c 
 - 启动mproxy：./mproxy -l 8080 -m Lbxx: -d 

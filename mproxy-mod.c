@@ -56,6 +56,8 @@ char r_h[128];
 int r_p; 
 char m_s[128];
 
+char m_div_header[2048];
+
 int server_sock; 
 int client_sock;
 int remote_sock;
@@ -77,7 +79,7 @@ static int io_flag; /* 网络io的一些标志位 */
 static int r_flag; /* 是否启用-r 匹配免流host直接转发CONNECT流量模式 */
 static int m_flag; /* 是否启用-m 关键字头匹配免流模式 */
 static int m_pid; /* 保存主进程id */
-
+static int div_header_flag;
 
 
 void server_loop();
@@ -95,6 +97,41 @@ int create_connection() ;
 int _main(int argc, char *argv[]) ;
 
 
+// 自定义替换函数
+void replaceString(char *str, const char *find, const char *replace) {
+    char buffer[1000];  // 假设不会超过1000个字符
+    char *pos;
+    int findLen = strlen(find);
+    int replaceLen = strlen(replace);
+
+    // 在str中查找find
+    pos = strstr(str, find);
+
+    // 如果找到要替换的字符串
+    if (pos != NULL) {
+        // 复制前半部分到buffer中
+        strncpy(buffer, str, pos - str);
+
+        // 在buffer中加入要替换的内容
+        buffer[pos - str] = '\0';
+        strcat(buffer, replace);
+
+        // 在buffer中加入剩余的内容
+        strcat(buffer, pos + findLen);
+
+        // 将buffer中的内容复制回原始字符串str
+        strcpy(str, buffer);
+    }
+}
+void replaceStringAll(char *str, const char *find, const char *replace){
+	int len_s=strlen(str);
+	//int len_2=0;
+	while(1){
+		replaceString(str,find,replace);
+		if(len_s==strlen(str))break;
+		len_s=strlen(str);
+	}
+}
 
 
 ssize_t readLine(int fd, void *buffer, size_t n)
@@ -345,10 +382,20 @@ int extract_host(const char * header)
 /* 响应隧道连接请求  */
 int send_tunnel_ok(int client_sock)
 {
-    char * resp = "HTTP/1.1 200 Connection Established\r\n\r\n";
+    char * resp ="HTTP/1.1 200 Connection Established\r\n";
+    //if(div_header_flag){
+    //	resp="HTTP/1.1 200 Connection Established\r\n";
     int len = strlen(resp);
+    len=len+2;//add \r\n length.
+    if(div_header_flag){
+	len+=strlen(m_div_header);
+	LOG("enter div header:%s",m_div_header);
+    }
     char buffer[len+1];
     strcpy(buffer,resp);
+    if(div_header_flag)
+    strcat(buffer,m_div_header);
+    strcat(buffer,"\r\n");
     if(send_data(client_sock,buffer,len) < 0)
     {
         perror("Send http tunnel response  failed\n");
@@ -729,6 +776,7 @@ void usage(void)
 {
     printf("Usage:\n");
     printf(" -l <port number>  specifyed local listen port \n");
+    printf(" -b <set reponse header> server to client ,add div reponse header,string endwith '\r\n' ,example: -r \"Server: test\\r\\nDate: 22 Mar 2023\\r\\n\"\n");
     printf(" -h <remote server and port> specifyed next hop server name to forward all trafic unhandled, prior to -m & -r\n");
     printf(" -r <server and port> specifyed server name to forward 'HTTP'&'CONNECT' to, no matter what host is\n");
     printf(" -m <ml key words>  specifyed key words replaced & recognized as 'Host:' function, prior to -r\n");
@@ -793,12 +841,19 @@ int _main(int argc, char *argv[])
     char info_buf[2048];
 	
 	int opt;
-	char optstrs[] = ":l:h:r:m:dED";
+	char optstrs[] = ":b:l:h:r:m:dED";
 	char *p = NULL;
 	while(-1 != (opt = getopt(argc, argv, optstrs)))
 	{
 		switch(opt)
 		{
+			case 'b':
+				strncpy(m_div_header, optarg, strlen(optarg));
+				replaceStringAll(m_div_header,"\\r\\n", "\r\n");
+				//printf("Your sting is: %s\n",m_s);
+				printf("Your div header sting is: %s\n",m_div_header);
+				div_header_flag=1;
+				break;
 			case 'l':
 				local_port = atoi(optarg);
 				break;
